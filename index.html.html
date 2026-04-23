@@ -1400,20 +1400,41 @@ let mType = 'expense';
 let curUser = null;
 let curTab = 'visao';
 
-// ─── STORAGE ─────────────────────────────────────────────────────────
-const sk    = k  => 'fpf_' + curUser + '_' + k;
-const sv    = (k,v) => { localStorage.setItem(sk(k), JSON.stringify(v)); showToast(); };
-const ld    = (k,d) => { try { const r = localStorage.getItem(sk(k)); return r !== null ? JSON.parse(r) : d; } catch(e) { return d; } };
-const getUsers   = () => { try { return JSON.parse(localStorage.getItem('fpf_users') || '{}'); } catch(e) { return {}; } };
-const saveUsers  = u => localStorage.setItem('fpf_users', JSON.stringify(u));
-const getTxs     = () => ld('txs',  []);
-const setTxs     = v  => sv('txs',  v);
-const getFins    = () => ld('fins', []);
-const setFins    = v  => sv('fins', v);
-const getAccs    = () => ld('accs', []);
-const setAccs    = v  => sv('accs', v);
-const getBudgets = () => ld('budgets', {Moradia:2000,Alimentação:800,Transporte:300,Saúde:300,Lazer:400,Educação:200,Vestuário:200,Assinaturas:150,Outros:300});
-const setBudgets = v  => sv('budgets', v);
+// ─── STORAGE (Supabase) ──────────────────────────────────────────────
+let _cache = {
+  txs: [], accs: [], fins: [], ativos: [],
+  budgets: {Moradia:2000,Alimentação:800,Transporte:300,Saúde:300,Lazer:400,Educação:200,Vestuário:200,Assinaturas:150,Outros:300}
+};
+
+async function loadAllData() {
+  if (!curUser) return;
+  try {
+    const [txRes, accRes, finRes, atvRes, budRes] = await Promise.all([
+      SUPA.from('transactions').select('*').eq('user_id', curUser).order('created_at'),
+      SUPA.from('accounts').select('*').eq('user_id', curUser).order('created_at'),
+      SUPA.from('financings').select('*').eq('user_id', curUser).order('created_at'),
+      SUPA.from('assets').select('*').eq('user_id', curUser).order('created_at'),
+      SUPA.from('budgets').select('*').eq('user_id', curUser).maybeSingle(),
+    ]);
+    _cache.txs    = (txRes.data  || []).map(r => ({id:r.id, type:r.type, desc:r.descricao, value:parseFloat(r.value), cat:r.cat, date:r.date, contaId:r.conta_id, ativoId:r.ativo_id, bemCat:r.bem_cat, finId:r.fin_id, finParcNum:r.fin_parc_num}));
+    _cache.accs   = (accRes.data || []).map(r => ({id:r.id, nome:r.nome, icone:r.icone, tipo:r.tipo, saldo:parseFloat(r.saldo||0), cor:r.cor}));
+    _cache.fins   = (finRes.data || []).map(r => ({id:r.id, nome:r.nome, banco:r.banco||'', icone:r.icone, patCat:r.pat_cat, total:parseFloat(r.total||0), numParcelas:r.num_parcelas, parcVal:parseFloat(r.parc_val), inicio:r.inicio, dia:r.dia, pagas:r.pagas||[], valorBem:parseFloat(r.valor_bem||0), valorAtual:parseFloat(r.valor_atual||0), ativoId:r.ativo_id}));
+    _cache.ativos = (atvRes.data || []).map(r => ({id:r.id, cat:r.cat, tipo:r.tipo, nome:r.nome, desc:r.descricao||'', valorCompra:parseFloat(r.valor_compra), valorAtual:parseFloat(r.valor_atual), dataAquisicao:r.data_aquisicao, finId:r.fin_id}));
+    _cache.budgets = (budRes.data && budRes.data.data) ? budRes.data.data : _cache.budgets;
+  } catch(e) { console.error('loadAllData error:', e); }
+}
+
+const getTxs     = () => _cache.txs;
+const getAccs    = () => _cache.accs;
+const getFins    = () => _cache.fins;
+const getAtivos  = () => _cache.ativos;
+const getBudgets = () => _cache.budgets;
+const setTxs     = v  => { _cache.txs    = v; };
+const setAccs    = v  => { _cache.accs   = v; };
+const setFins    = v  => { _cache.fins   = v; };
+const setAtivos  = v  => { _cache.ativos = v; };
+const setBudgets = v  => { _cache.budgets = v; };
+const newId      = arr => arr.length ? Math.max(...arr.map(x => x.id||0)) + 1 : 1;
 
 // ─── TOAST ────────────────────────────────────────────────────────────
 let toastTimer;
@@ -1432,7 +1453,6 @@ const sumInc    = txs => txs.filter(t => t.type==='income').reduce((s,t) => s+t.
 const sumExp    = txs => txs.filter(t => t.type==='expense').reduce((s,t) => s+t.value, 0);
 const sumInvest = txs => txs.filter(t => t.type==='invest').reduce((s,t) => s+t.value, 0);
 const catInfo = (cat, type) => (type==='expense' ? CAT_EXP : CAT_INC).find(c => c.name===cat) || {color:'#64748b', icon:'💰'};
-const newId  = arr => arr.length ? Math.max(...arr.map(x => x.id)) + 1 : 1;
 
 // ─── AUTH (Supabase) ─────────────────────────────────────────────────
 let regMode = false;
@@ -2055,7 +2075,7 @@ document.getElementById('save-tx').addEventListener('click', async () => {
 
   // Insert transaction to Supabase
   const { data: txData, error: txErr } = await SUPA.from('transactions').insert({
-    user_id: curUser, type: mType, desc, value: val, cat, date,
+    user_id: curUser, type: mType, descricao: desc, value: val, cat, date,
     conta_id: contaId, ativo_id: ativoId, bem_cat: bemCat, fin_id: null, fin_parc_num: null
   }).select().single();
   if (txErr) { alert('Erro ao salvar: ' + txErr.message); return; }
@@ -2182,8 +2202,7 @@ const BENS_CATS = [
 // Combined for compat
 const PAT_CATS = [...ASSET_CATS, ...BENS_CATS];
 
-const getAtivos  = () => ld('ativos', []);
-const setAtivos  = v  => sv('ativos', v);
+// getAtivos/setAtivos defined in storage section
 
 function calcPatVar() {
   const compra = parseFloat(document.getElementById('pat-compra').value) || 0;
@@ -2406,7 +2425,7 @@ document.getElementById('save-pat').addEventListener('click', async () => {
   const valorAtual    = parseFloat(document.getElementById('pat-atual').value) || valorCompra;
   const dataAquisicao = document.getElementById('pat-data').value;
   if (!nome || !valorCompra) { alert('Informe o nome e o valor de compra.'); return; }
-  await SUPA.from('assets').insert({user_id: curUser, cat, tipo, nome, desc, valor_compra: valorCompra, valor_atual: valorAtual, data_aquisicao: dataAquisicao || null});
+  await SUPA.from('assets').insert({user_id: curUser, cat, tipo, nome, descricao: desc, valor_compra: valorCompra, valor_atual: valorAtual, data_aquisicao: dataAquisicao || null});
   await loadAllData();
   patModal.style.display = 'none';
   renderPatrimonio(); renderInsights();
@@ -2583,7 +2602,7 @@ document.getElementById('confirm-edit-pat').addEventListener('click', async () =
   const valorAtual    = parseFloat(document.getElementById('edit-pat-atual').value) || valorCompra;
   const dataAquisicao = document.getElementById('edit-pat-data').value;
   if (!nome || !valorCompra) { alert('Informe nome e valor de compra.'); return; }
-  await SUPA.from('assets').update({nome, desc, valor_compra: valorCompra, valor_atual: valorAtual, data_aquisicao: dataAquisicao || null}).eq('id', id).eq('user_id', curUser);
+  await SUPA.from('assets').update({nome, descricao: desc, valor_compra: valorCompra, valor_atual: valorAtual, data_aquisicao: dataAquisicao || null}).eq('id', id).eq('user_id', curUser);
   const ativo = getAtivos().find(a => a.id === id);
   if (ativo && ativo.finId) {
     await SUPA.from('financings').update({nome, banco: desc.replace('Financiado — ',''), valor_bem: valorCompra, valor_atual: valorAtual}).eq('id', ativo.finId).eq('user_id', curUser);
