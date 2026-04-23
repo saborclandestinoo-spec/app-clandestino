@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>App Clandestino</title>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPA = supabase.createClient('https://igkixhxxlegayupbtnqa.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlna2l4aHh4bGVnYXl1cGJ0bnFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MDc1OTcsImV4cCI6MjA5MjQ4MzU5N30.pviIRC-6iCycp0CzUXMYYh74y1-e2DLC6FHVyo06MPg');
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 
@@ -809,7 +813,7 @@ body{
       <input type="text" id="inp-name" placeholder="Seu nome"/>
     </div>
     <div class="fg">
-      <label>Usuário</label>
+      <label>Email</label>
       <input type="text" id="inp-user" placeholder="Digite seu usuário"/>
     </div>
     <div class="fg">
@@ -1430,63 +1434,109 @@ const sumInvest = txs => txs.filter(t => t.type==='invest').reduce((s,t) => s+t.
 const catInfo = (cat, type) => (type==='expense' ? CAT_EXP : CAT_INC).find(c => c.name===cat) || {color:'#64748b', icon:'💰'};
 const newId  = arr => arr.length ? Math.max(...arr.map(x => x.id)) + 1 : 1;
 
-// ─── AUTH ─────────────────────────────────────────────────────────────
+// ─── AUTH (Supabase) ─────────────────────────────────────────────────
 let regMode = false;
+
 function toggleMode() {
   regMode = !regMode;
-  document.getElementById('fg-name').style.display    = regMode ? 'block' : 'none';
-  document.getElementById('form-title').textContent   = regMode ? 'Criar conta' : 'Bem-vindo de volta';
-  document.getElementById('form-sub').textContent     = regMode ? 'Crie sua conta gratuita' : 'Entre com sua conta para continuar';
-  document.querySelector('.lbtn').textContent         = regMode ? 'Criar conta' : 'Entrar';
-  document.getElementById('ltoggle').innerHTML        = regMode ? 'Já tem conta? <strong>Entrar</strong>' : 'Não tem conta? <strong>Criar conta</strong>';
-  document.getElementById('lerr').style.display = 'none';
+  document.getElementById('fg-name').style.display  = regMode ? 'block' : 'none';
+  document.getElementById('form-title').textContent = regMode ? 'Criar conta' : 'Bem-vindo de volta';
+  document.getElementById('form-sub').textContent   = regMode ? 'Crie sua conta gratuita' : 'Entre com sua conta para continuar';
+  document.querySelector('.lbtn').textContent       = regMode ? 'Criar conta' : 'Entrar';
+  document.getElementById('ltoggle').innerHTML      = regMode ? 'Já tem conta? <strong>Entrar</strong>' : 'Não tem conta? <strong>Criar conta</strong>';
+  document.getElementById('lerr').style.display     = 'none';
 }
-function showErr(msg) { const e = document.getElementById('lerr'); e.textContent = msg; e.style.display = 'block'; }
 
-document.getElementById('inp-pass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
-document.getElementById('inp-user').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('inp-pass').focus(); });
-
-function doLogin() {
-  const user = document.getElementById('inp-user').value.trim().toLowerCase();
-  const pass = document.getElementById('inp-pass').value;
-  const name = document.getElementById('inp-name').value.trim();
-  if (!user || !pass) { showErr('Preencha usuário e senha.'); return; }
-  const users = getUsers();
-  if (regMode) {
-    if (!name) { showErr('Informe seu nome.'); return; }
-    if (pass.length < 4) { showErr('Senha deve ter ao menos 4 caracteres.'); return; }
-    if (users[user]) { showErr('Usuário já existe.'); return; }
-    users[user] = {pass, name}; saveUsers(users); loginAs(user, name);
-  } else {
-    if (!users[user]) { showErr('Usuário não encontrado.'); return; }
-    if (users[user].pass !== pass) { showErr('Senha incorreta.'); return; }
-    loginAs(user, users[user].name);
-  }
+function showErr(msg) {
+  const e = document.getElementById('lerr');
+  e.textContent = msg;
+  e.style.display = 'block';
 }
+
+function setLoginLoading(loading) {
+  const btn = document.querySelector('.lbtn');
+  btn.textContent  = loading ? 'Aguarde...' : (regMode ? 'Criar conta' : 'Entrar');
+  btn.disabled     = loading;
+  btn.style.opacity = loading ? '.7' : '1';
+}
+
+async function doLogin() {
+  // Now uses email instead of username
+  const email = document.getElementById('inp-user').value.trim().toLowerCase();
+  const pass  = document.getElementById('inp-pass').value;
+  const name  = document.getElementById('inp-name').value.trim();
+  if (!email || !pass) { showErr('Preencha email e senha.'); return; }
+  setLoginLoading(true);
+  try {
+    if (regMode) {
+      if (!name)         { showErr('Informe seu nome.'); setLoginLoading(false); return; }
+      if (pass.length < 6) { showErr('Senha deve ter ao menos 6 caracteres.'); setLoginLoading(false); return; }
+      const { error } = await SUPA.auth.signUp({ email, password: pass, options: { data: { name } } });
+      if (error) { showErr(translateError(error.message)); setLoginLoading(false); return; }
+      showErr('✅ Conta criada! Verifique seu email para confirmar.');
+      document.getElementById('lerr').style.background = '#f0fdf4';
+      document.getElementById('lerr').style.borderColor = '#86efac';
+      document.getElementById('lerr').style.color = '#16a34a';
+    } else {
+      const { data, error } = await SUPA.auth.signInWithPassword({ email, password: pass });
+      if (error) { showErr(translateError(error.message)); setLoginLoading(false); return; }
+      loginAs(data.user, data.user.user_metadata?.name || email.split('@')[0]);
+    }
+  } catch(e) { showErr('Erro de conexão. Tente novamente.'); }
+  setLoginLoading(false);
+}
+
+function translateError(msg) {
+  if (msg.includes('Invalid login'))       return 'Email ou senha incorretos.';
+  if (msg.includes('Email not confirmed')) return 'Confirme seu email antes de entrar.';
+  if (msg.includes('already registered'))  return 'Este email já tem uma conta. Faça login.';
+  if (msg.includes('Password should'))     return 'Senha deve ter ao menos 6 caracteres.';
+  return msg;
+}
+
 function loginAs(user, name) {
-  curUser = user;
-  localStorage.setItem('fpf_session', JSON.stringify({user, name}));
+  curUser = user.id;
   document.getElementById('uavatar').textContent = name.charAt(0).toUpperCase();
   document.getElementById('uname').textContent   = name.split(' ')[0];
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display   = 'block';
-  render();
+  loadAllData().then(() => render());
 }
-function doLogout() {
-  localStorage.removeItem('fpf_session');
+
+async function doLogout() {
+  await SUPA.auth.signOut();
   curUser = null;
+  // Clear in-memory data
+  _cache = {};
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app-screen').style.display   = 'none';
   document.getElementById('inp-user').value = '';
   document.getElementById('inp-pass').value = '';
   document.getElementById('lerr').style.display = 'none';
 }
-(function() {
-  try {
-    const s = JSON.parse(localStorage.getItem('fpf_session'));
-    if (s && s.user) { const u = getUsers(); if (u[s.user]) loginAs(s.user, s.name || u[s.user].name); }
-  } catch(e) {}
-})();
+
+// Update placeholder to say "Email" instead of "Usuário"
+document.getElementById('inp-user').placeholder = 'seu@email.com';
+document.getElementById('inp-user').type        = 'email';
+
+document.getElementById('inp-pass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+document.getElementById('inp-user').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('inp-pass').focus(); });
+
+// Check existing session on load
+SUPA.auth.getSession().then(({ data: { session } }) => {
+  if (session) {
+    const name = session.user.user_metadata?.name || session.user.email.split('@')[0];
+    loginAs(session.user, name);
+  }
+});
+
+SUPA.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT') {
+    curUser = null;
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app-screen').style.display   = 'none';
+  }
+});
 
 // ─── TAB NAVIGATION ───────────────────────────────────────────────────
 const ALL_TABS = ['visao','tx','contas','fin','orc','pat','ins'];
@@ -1657,36 +1707,39 @@ function renderTxList() {
     const editBtn=document.createElement('button'); editBtn.className='edit-btn'; editBtn.textContent='✏️'; editBtn.title='Editar';
     editBtn.addEventListener('click', () => openEditTx(t.id));
     const delBtn=document.createElement('button'); delBtn.className='tx-del'; delBtn.textContent='✕'; delBtn.title='Remover';
-    delBtn.addEventListener('click', () => {
+    delBtn.addEventListener('click', async () => {
       if (!confirm('Remover este lançamento?')) return;
       // Revert account balance
       if (t.contaId) {
-        const accs=getAccs(), acc=accs.find(a=>a.id===t.contaId);
-        if (acc) { acc.saldo=parseFloat((acc.saldo+(t.type==='income'?-t.value:t.value)).toFixed(2)); setAccs(accs); }
-      }
-      // Revert ativo value if invest tx
-      if (t.type==='invest' && t.ativoId) {
-        const ativos=getAtivos(), ativo=ativos.find(a=>a.id===t.ativoId);
-        if (ativo) { ativo.valorAtual=parseFloat((ativo.valorAtual-t.value).toFixed(2)); ativo.valorCompra=parseFloat((ativo.valorCompra-t.value).toFixed(2)); setAtivos(ativos); }
-      }
-      // If auto-created invest ativo (no ativoId) find and reduce by desc+cat
-      if (t.type==='invest' && !t.ativoId) {
-        const catMap={'Renda Fixa':'renda-fixa','Renda Variável':'renda-var','Fundos':'fundos','Criptomoedas':'cripto','Tesouro Direto':'tesouro','Poupança':'renda-fixa','Previdência':'fundos','Outros Investimentos':'outro-inv'};
-        const patCat=catMap[t.cat]||'outro-inv';
-        const ativos=getAtivos(), ativo=ativos.find(a=>a.nome===t.desc&&a.cat===patCat);
-        if (ativo) {
-          ativo.valorAtual=parseFloat((ativo.valorAtual-t.value).toFixed(2));
-          ativo.valorCompra=parseFloat((ativo.valorCompra-t.value).toFixed(2));
-          if (ativo.valorAtual<=0 && ativo.valorCompra<=0) setAtivos(ativos.filter(a=>a.id!==ativo.id));
-          else setAtivos(ativos);
+        const acc = _cache.accs.find(a => a.id === t.contaId);
+        if (acc) {
+          const newSaldo = parseFloat((acc.saldo + (t.type==='income' ? -t.value : t.value)).toFixed(2));
+          await SUPA.from('accounts').update({saldo: newSaldo}).eq('id', t.contaId).eq('user_id', curUser);
         }
       }
-      // If bem à vista: remove the auto-created bem from patrimônio
-      if (t.type==='bem') {
-        const ativos=getAtivos(), ativo=ativos.find(a=>a.nome===t.desc&&a.cat===t.bemCat&&a.valorCompra===t.value);
-        if (ativo) setAtivos(ativos.filter(a=>a.id!==ativo.id));
+      // Revert invest ativo
+      if (t.type==='invest' && t.ativoId) {
+        const ativo = _cache.ativos.find(a => a.id === t.ativoId);
+        if (ativo) await SUPA.from('assets').update({valor_atual: parseFloat((ativo.valorAtual-t.value).toFixed(2)), valor_compra: parseFloat((ativo.valorCompra-t.value).toFixed(2))}).eq('id', t.ativoId).eq('user_id', curUser);
       }
-      setTxs(getTxs().filter(x=>x.id!==t.id)); render();
+      if (t.type==='invest' && !t.ativoId) {
+        const catMap={'Renda Fixa':'renda-fixa','Renda Variável':'renda-var','Fundos':'fundos','Criptomoedas':'cripto','Tesouro Direto':'tesouro','Poupança':'renda-fixa','Previdência':'fundos','Outros Investimentos':'outro-inv'};
+        const patCat = catMap[t.cat]||'outro-inv';
+        const ativo = _cache.ativos.find(a => a.nome===t.desc && a.cat===patCat);
+        if (ativo) {
+          const nv = parseFloat((ativo.valorAtual-t.value).toFixed(2));
+          const nc = parseFloat((ativo.valorCompra-t.value).toFixed(2));
+          if (nv <= 0) await SUPA.from('assets').delete().eq('id', ativo.id).eq('user_id', curUser);
+          else await SUPA.from('assets').update({valor_atual: nv, valor_compra: nc}).eq('id', ativo.id).eq('user_id', curUser);
+        }
+      }
+      if (t.type==='bem') {
+        const ativo = _cache.ativos.find(a => a.nome===t.desc && a.cat===t.bemCat && parseFloat(a.valorCompra)===t.value);
+        if (ativo) await SUPA.from('assets').delete().eq('id', ativo.id).eq('user_id', curUser);
+      }
+      await SUPA.from('transactions').delete().eq('id', t.id).eq('user_id', curUser);
+      await loadAllData();
+      render();
     });
     actions.appendChild(editBtn); actions.appendChild(delBtn);
     item.appendChild(actions); list.appendChild(item);
@@ -1738,8 +1791,11 @@ function renderAccounts() {
       <div class="acc-name">${acc.nome}</div>
       <div class="acc-type">${acc.tipo} · ${pct}% do total</div>
       <div class="acc-balance ${acc.saldo>=0?'positive':'negative'}">${fmt(acc.saldo)}</div>`;
-    card.querySelector('.acc-del').addEventListener('click', () => {
-      if (confirm('Remover a conta "' + acc.nome + '"?')) { setAccs(getAccs().filter(x => x.id!==acc.id)); renderAccounts(); renderInsights(); }
+    card.querySelector('.acc-del').addEventListener('click', async () => {
+      if (!confirm('Remover a conta "' + acc.nome + '"?')) return;
+      await SUPA.from('accounts').delete().eq('id', acc.id).eq('user_id', curUser);
+      await loadAllData();
+      renderAccounts(); renderInsights();
     });
     // Add edit button to card top
     const accEditBtn = document.createElement('button'); accEditBtn.className='edit-btn'; accEditBtn.textContent='✏️'; accEditBtn.title='Editar conta';
@@ -1775,36 +1831,18 @@ function renderBudget() {
     return `<div class="bpcard"><div class="bprow"><span class="bp-name">${c.icon} ${c.name}</span><span class="bp-vals">${fmt(spent)} / ${fmt(limit)} <span style="color:${color};font-weight:700;">${pct}%</span></span></div><div class="pbar"><div class="pfill" style="width:${pct}%;background:${color};"></div></div></div>`;
   }).join('');
 }
-function updBudget(cat,val) { const b=getBudgets(); b[cat]=parseFloat(val)||0; setBudgets(b); renderBudget(); }
-
-// ─── INSIGHTS ─────────────────────────────────────────────────────────
-function renderInsights() {
-  const txs=mTxs(), el=document.getElementById('ins-list');
-  if (!txs.length) { el.innerHTML='<div class="empty"><span class="ei">💡</span>Adicione transações para ver seus insights.</div>'; return; }
-  const inc=sumInc(txs), exp=sumExp(txs), ec={};
-  txs.filter(t=>t.type==='expense').forEach(t => ec[t.cat]=(ec[t.cat]||0)+t.value);
-  const top=Object.entries(ec).sort((a,b)=>b[1]-a[1])[0];
-  const savR=inc>0?Math.round((1-exp/inc)*100):0;
-  const ins=[];
-  if (inc>0) ins.push({i:'💰',t:`Taxa de poupança este mês: <strong>${savR}%</strong>${savR>=20?' — excelente!':savR>=10?' — bom, continue assim.':' — tente economizar mais.'}`});
-  if (top) ins.push({i:'🔍',t:`Maior gasto: <strong>${top[0]}</strong> com <strong>${fmt(top[1])}</strong>${inc>0?' ('+Math.round(top[1]/inc*100)+'% da renda)':''}.`});
-  const rent=ec['Moradia']||0;
-  if (inc>0&&rent>0&&rent/inc>.3) ins.push({i:'🏠',t:`Moradia é <strong>${Math.round(rent/inc*100)}%</strong> da renda. Recomendado: até <strong>30%</strong>.`});
-  if (savR<0) ins.push({i:'⚠️',t:`Despesas superam receitas em <strong>${fmt(exp-inc)}</strong>. Atenção!`});
-  if (savR>=30) ins.push({i:'🚀',t:`Você poupa mais de 30% da renda. Considere investir o excedente!`});
-  const accs=getAccs();
-  if (accs.length) { const tot=accs.reduce((s,a)=>s+a.saldo,0); ins.push({i:'🏦',t:`Saldo total nas contas: <strong>${fmt(tot)}</strong>.`}); }
-  const ativos=getAtivos();
-  if (ativos.length) {
-    const invAtivos=ativos.filter(a=>ASSET_CATS.some(c=>c.id===a.cat));
-    const totInv=invAtivos.reduce((s,a)=>s+(a.valorAtual||a.valorCompra||0),0);
-    const totBens=ativos.filter(a=>BENS_CATS.some(c=>c.id===a.cat)).reduce((s,a)=>s+(a.valorAtual||a.valorCompra||0),0);
-    const totFins=getFins().reduce((s,f)=>{const p=(f.pagas||[]).length;return s+(f.numParcelas-p)*f.parcVal;},0);
-    const liq=totInv+totBens+accs.reduce((s,a)=>s+Math.max(0,a.saldo),0)-totFins;
-    if(totInv>0)ins.push({i:'📈',t:'Total investido: <strong>'+fmt(totInv)+'</strong> em '+invAtivos.length+' ativo'+(invAtivos.length>1?'s':'')+'.'});
-    ins.push({i:'🏛️',t:'Patrimônio líquido estimado: <strong>'+fmt(liq)+'</strong>.'});
+async function updBudget(cat, val) {
+  const b = getBudgets();
+  b[cat] = parseFloat(val) || 0;
+  _cache.budgets = b;
+  const existing = await SUPA.from('budgets').select('id').eq('user_id', curUser).single();
+  if (existing.data) {
+    await SUPA.from('budgets').update({data: b, updated_at: new Date().toISOString()}).eq('user_id', curUser);
+  } else {
+    await SUPA.from('budgets').insert({user_id: curUser, data: b});
   }
-  el.innerHTML = ins.map(x => `<div class="ins-card"><span class="ins-icon">${x.i}</span><div class="ins-text">${x.t}</div></div>`).join('');
+  showToast();
+  renderBudget();
 }
 
 // ─── FINANCING ────────────────────────────────────────────────────────
@@ -1853,9 +1891,12 @@ function deleteFin(finId) {
   const fin = getFins().find(f => f.id === finId);
   const extra = (fin && fin.ativoId) ? ' O bem vinculado também será removido do patrimônio.' : '';
   if (!confirm('Remover este financiamento?' + extra)) return;
-  if (fin && fin.ativoId) setAtivos(getAtivos().filter(a => a.id !== fin.ativoId));
-  setFins(getFins().filter(f => f.id !== finId));
-  renderFinanciamentos(); renderPatrimonio();
+  (async () => {
+    if (fin && fin.ativoId) await SUPA.from('assets').delete().eq('id', fin.ativoId).eq('user_id', curUser);
+    await SUPA.from('financings').delete().eq('id', finId).eq('user_id', curUser);
+    await loadAllData();
+    renderFinanciamentos(); renderPatrimonio();
+  })();
 }
 
 function openParcelasModal(finId) {
@@ -2000,7 +2041,7 @@ document.getElementById('btn-income').addEventListener('click',()=>{mType='incom
 document.getElementById('btn-invest').addEventListener('click',()=>{mType='invest';document.getElementById('btn-invest').className='type-btn ainv';document.getElementById('btn-expense').className='type-btn';document.getElementById('btn-income').className='type-btn';document.getElementById('btn-bem').className='type-btn';updateCatSel();});
 document.getElementById('btn-bem').addEventListener('click',()=>{mType='bem';document.getElementById('btn-bem').className='type-btn abem';document.getElementById('btn-expense').className='type-btn';document.getElementById('btn-income').className='type-btn';document.getElementById('btn-invest').className='type-btn';updateCatSel();});
 
-document.getElementById('save-tx').addEventListener('click', () => {
+document.getElementById('save-tx').addEventListener('click', async () => {
   const desc     = document.getElementById('inp-desc').value.trim();
   const val      = parseFloat(document.getElementById('inp-val').value);
   const cat      = document.getElementById('inp-cat').value;
@@ -2010,59 +2051,50 @@ document.getElementById('save-tx').addEventListener('click', () => {
   const ativoId  = ativoEl ? (parseInt(ativoEl.value) || null) : null;
   const bemCat   = document.getElementById('inp-bem-cat') ? document.getElementById('inp-bem-cat').value : 'outros';
   const bemAtual = document.getElementById('inp-bem-atual') ? (parseFloat(document.getElementById('inp-bem-atual').value) || null) : null;
-
   if (!desc || !val || val <= 0 || !date) { alert('Preencha todos os campos.'); return; }
 
-  // Save transaction
-  const txs = getTxs();
-  txs.push({id: newId(txs), type: mType, desc, value: val, cat, date, contaId, ativoId, bemCat});
-  setTxs(txs);
+  // Insert transaction to Supabase
+  const { data: txData, error: txErr } = await SUPA.from('transactions').insert({
+    user_id: curUser, type: mType, desc, value: val, cat, date,
+    conta_id: contaId, ativo_id: ativoId, bem_cat: bemCat, fin_id: null, fin_parc_num: null
+  }).select().single();
+  if (txErr) { alert('Erro ao salvar: ' + txErr.message); return; }
 
-  // ── Debit/credit account balance ──────────────────────────────────
+  // Update account balance
   if (contaId) {
-    const accs = getAccs(), acc = accs.find(a => a.id === contaId);
+    const acc = _cache.accs.find(a => a.id === contaId);
     if (acc) {
-      acc.saldo = parseFloat((acc.saldo + (mType === 'income' ? val : -val)).toFixed(2));
-      setAccs(accs);
+      const newSaldo = parseFloat((acc.saldo + (mType === 'income' ? val : -val)).toFixed(2));
+      await SUPA.from('accounts').update({saldo: newSaldo}).eq('id', contaId).eq('user_id', curUser);
     }
   }
 
-  // ── INVESTMENT: update/create ativo in patrimônio ─────────────────
+  // Investment: update/create ativo
   if (mType === 'invest') {
     if (ativoId) {
-      // Linked to existing ativo — add to it
-      const ativos = getAtivos(), ativo = ativos.find(a => a.id === ativoId);
+      const ativo = _cache.ativos.find(a => a.id === ativoId);
       if (ativo) {
-        ativo.valorAtual   = parseFloat((ativo.valorAtual   + val).toFixed(2));
-        ativo.valorCompra  = parseFloat((ativo.valorCompra  + val).toFixed(2));
-        setAtivos(ativos);
+        await SUPA.from('assets').update({valor_atual: parseFloat((ativo.valorAtual+val).toFixed(2)), valor_compra: parseFloat((ativo.valorCompra+val).toFixed(2))}).eq('id', ativoId).eq('user_id', curUser);
       }
     } else {
-      // Auto-create or accumulate in existing ativo by name+category
       const catMap = {'Renda Fixa':'renda-fixa','Renda Variável':'renda-var','Fundos':'fundos','Criptomoedas':'cripto','Tesouro Direto':'tesouro','Poupança':'renda-fixa','Previdência':'fundos','Outros Investimentos':'outro-inv'};
       const patCat = catMap[cat] || 'outro-inv';
-      const ativos = getAtivos();
-      const existing = ativos.find(a => a.nome === desc && a.cat === patCat);
+      const existing = _cache.ativos.find(a => a.nome === desc && a.cat === patCat);
       if (existing) {
-        existing.valorAtual  = parseFloat((existing.valorAtual  + val).toFixed(2));
-        existing.valorCompra = parseFloat((existing.valorCompra + val).toFixed(2));
-        setAtivos(ativos);
+        await SUPA.from('assets').update({valor_atual: parseFloat((existing.valorAtual+val).toFixed(2)), valor_compra: parseFloat((existing.valorCompra+val).toFixed(2))}).eq('id', existing.id).eq('user_id', curUser);
       } else {
-        ativos.push({id: newId(ativos), cat: patCat, tipo: 'ativo', nome: desc, desc: cat, valorCompra: val, valorAtual: val, dataAquisicao: date});
-        setAtivos(ativos);
+        await SUPA.from('assets').insert({user_id: curUser, cat: patCat, tipo: 'ativo', nome: desc, descricao: cat, valor_compra: val, valor_atual: val, data_aquisicao: date});
       }
     }
   }
 
-  // ── BEM À VISTA: create bem in patrimônio + debit account ─────────
+  // Bem à vista: create asset
   if (mType === 'bem') {
     const valorAtualBem = bemAtual || val;
-    const ativos = getAtivos();
-    ativos.push({id: newId(ativos), cat: bemCat, tipo: 'bem', nome: desc, desc: 'Comprado à vista', valorCompra: val, valorAtual: valorAtualBem, dataAquisicao: date});
-    setAtivos(ativos);
-    // Account was already debited above (mType !== 'income')
+    await SUPA.from('assets').insert({user_id: curUser, cat: bemCat, tipo: 'bem', nome: desc, descricao: 'Comprado à vista', valor_compra: val, valor_atual: valorAtualBem, data_aquisicao: date});
   }
 
+  await loadAllData();
   txModal.style.display = 'none';
   render();
 });
@@ -2076,15 +2108,16 @@ document.getElementById('open-acc-modal').addEventListener('click', () => {
 });
 document.getElementById('close-acc-modal').addEventListener('click',()=>accModal.style.display='none');
 accModal.addEventListener('click',e=>{if(e.target===accModal)accModal.style.display='none';});
-document.getElementById('save-acc').addEventListener('click',()=>{
-  const nome=document.getElementById('acc-nome').value.trim();
-  const tipoSel=document.getElementById('acc-tipo');
-  const icone=tipoSel.value;
-  const tipo=tipoSel.options[tipoSel.selectedIndex].text.split(' ').slice(1).join(' ');
-  const saldo=parseFloat(document.getElementById('acc-saldo').value)||0;
-  const cor=document.getElementById('acc-cor').value;
+document.getElementById('save-acc').addEventListener('click', async ()=>{
+  const nome    = document.getElementById('acc-nome').value.trim();
+  const tipoSel = document.getElementById('acc-tipo');
+  const icone   = tipoSel.value;
+  const tipo    = tipoSel.options[tipoSel.selectedIndex].text.split(' ').slice(1).join(' ');
+  const saldo   = parseFloat(document.getElementById('acc-saldo').value) || 0;
+  const cor     = document.getElementById('acc-cor').value;
   if (!nome) { alert('Informe o nome da conta.'); return; }
-  const accs=getAccs(); accs.push({id:newId(accs),nome,icone,tipo,saldo,cor}); setAccs(accs);
+  await SUPA.from('accounts').insert({user_id: curUser, nome, icone, tipo, saldo, cor});
+  await loadAllData();
   accModal.style.display='none'; renderAccounts();
 });
 
@@ -2098,7 +2131,7 @@ document.getElementById('open-fin-modal').addEventListener('click',()=>{
 });
 document.getElementById('close-fin-modal').addEventListener('click',()=>finModal.style.display='none');
 finModal.addEventListener('click',e=>{if(e.target===finModal)finModal.style.display='none';});
-document.getElementById('save-fin').addEventListener('click',()=>{
+document.getElementById('save-fin').addEventListener('click', async ()=>{
   const nome       = document.getElementById('fin-nome').value.trim();
   const banco      = document.getElementById('fin-banco').value.trim();
   const icone      = document.getElementById('fin-icone').value;
@@ -2111,13 +2144,14 @@ document.getElementById('save-fin').addEventListener('click',()=>{
   const valorBem   = parseFloat(document.getElementById('fin-valor-bem').value)||total;
   const valorAtual = parseFloat(document.getElementById('fin-valor-atual').value)||valorBem;
   if (!nome||!numParc||!parcVal||!inicio){alert('Preencha nome, parcelas, valor e data.');return;}
-  const fins = getFins();
-  const finId = newId(fins);
-  const ativos = getAtivos();
-  const ativoId = newId(ativos);
-  ativos.push({id:ativoId, cat:patCat, nome, desc:banco?'Financiado — '+banco:'', valorCompra:valorBem, valorAtual, dataAquisicao:inicio, finId});
-  fins.push({id:finId, nome, banco, icone, patCat, total, numParcelas:numParc, parcVal, inicio, dia, pagas:[], valorBem, valorAtual, ativoId});
-  setAtivos(ativos); setFins(fins);
+
+  // Create ativo first
+  const { data: ativoData } = await SUPA.from('assets').insert({user_id: curUser, cat: patCat, tipo: 'bem', nome, descricao: banco?'Financiado — '+banco:'', valor_compra: valorBem, valor_atual: valorAtual, data_aquisicao: inicio}).select().single();
+
+  // Create financing
+  await SUPA.from('financings').insert({user_id: curUser, nome, banco, icone, pat_cat: patCat, total, num_parcelas: numParc, parc_val: parcVal, inicio, dia, pagas: [], valor_bem: valorBem, valor_atual: valorAtual, ativo_id: ativoData?.id || null});
+
+  await loadAllData();
   finModal.style.display='none'; renderFinanciamentos(); renderPatrimonio();
 });
 
@@ -2167,9 +2201,11 @@ function calcPatVar() {
 
 function deleteAtivo(id) {
   if (!confirm('Remover este ativo?')) return;
-  setAtivos(getAtivos().filter(a => a.id !== id));
-  renderPatrimonio();
-  renderInsights();
+  (async () => {
+    await SUPA.from('assets').delete().eq('id', id).eq('user_id', curUser);
+    await loadAllData();
+    renderPatrimonio(); renderInsights();
+  })();
 }
 
 function renderPatrimonio() {
@@ -2361,21 +2397,19 @@ document.getElementById('open-pat-modal').addEventListener('click', () => {
 document.getElementById('close-pat-modal').addEventListener('click', () => patModal.style.display = 'none');
 patModal.addEventListener('click', e => { if (e.target === patModal) patModal.style.display = 'none'; });
 
-document.getElementById('save-pat').addEventListener('click', () => {
-  const cat          = document.getElementById('pat-cat').value;
-  const tipo         = document.getElementById('pat-tipo').value;
-  const nome         = document.getElementById('pat-nome').value.trim();
-  const desc         = document.getElementById('pat-desc').value.trim();
-  const valorCompra  = parseFloat(document.getElementById('pat-compra').value) || 0;
-  const valorAtual   = parseFloat(document.getElementById('pat-atual').value) || valorCompra;
+document.getElementById('save-pat').addEventListener('click', async () => {
+  const cat           = document.getElementById('pat-cat').value;
+  const tipo          = document.getElementById('pat-tipo').value;
+  const nome          = document.getElementById('pat-nome').value.trim();
+  const desc          = document.getElementById('pat-desc').value.trim();
+  const valorCompra   = parseFloat(document.getElementById('pat-compra').value) || 0;
+  const valorAtual    = parseFloat(document.getElementById('pat-atual').value) || valorCompra;
   const dataAquisicao = document.getElementById('pat-data').value;
   if (!nome || !valorCompra) { alert('Informe o nome e o valor de compra.'); return; }
-  const ativos = getAtivos();
-  ativos.push({ id: newId(ativos), cat, tipo, nome, desc, valorCompra, valorAtual, dataAquisicao });
-  setAtivos(ativos);
+  await SUPA.from('assets').insert({user_id: curUser, cat, tipo, nome, desc, valor_compra: valorCompra, valor_atual: valorAtual, data_aquisicao: dataAquisicao || null});
+  await loadAllData();
   patModal.style.display = 'none';
-  renderPatrimonio();
-  renderInsights();
+  renderPatrimonio(); renderInsights();
 });
 
 
@@ -2427,30 +2461,28 @@ document.getElementById('edit-tx-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('edit-tx-modal')) document.getElementById('edit-tx-modal').style.display = 'none';
 });
 
-document.getElementById('confirm-edit-tx').addEventListener('click', () => {
-  const id    = parseInt(document.getElementById('edit-tx-id').value);
-  const desc  = document.getElementById('edit-tx-desc').value.trim();
-  const val   = parseFloat(document.getElementById('edit-tx-val').value);
-  const cat   = document.getElementById('edit-tx-cat').value;
-  const date  = document.getElementById('edit-tx-date').value;
+document.getElementById('confirm-edit-tx').addEventListener('click', async () => {
+  const id      = parseInt(document.getElementById('edit-tx-id').value);
+  const desc    = document.getElementById('edit-tx-desc').value.trim();
+  const val     = parseFloat(document.getElementById('edit-tx-val').value);
+  const cat     = document.getElementById('edit-tx-cat').value;
+  const date    = document.getElementById('edit-tx-date').value;
   const contaId = parseInt(document.getElementById('edit-tx-conta').value) || null;
   if (!desc || !val || val <= 0 || !date) { alert('Preencha todos os campos.'); return; }
-  const txs = getTxs();
-  const idx = txs.findIndex(x => x.id === id);
-  if (idx === -1) return;
-  const old = txs[idx];
+  const old = _cache.txs.find(x => x.id === id);
   // Revert old account
-  if (old.contaId) {
-    const accs = getAccs(), acc = accs.find(a => a.id === old.contaId);
-    if (acc) { acc.saldo = parseFloat((acc.saldo + (old.type==='income' ? -old.value : old.value)).toFixed(2)); setAccs(accs); }
+  if (old && old.contaId) {
+    const acc = _cache.accs.find(a => a.id === old.contaId);
+    if (acc) await SUPA.from('accounts').update({saldo: parseFloat((acc.saldo + (old.type==='income'?-old.value:old.value)).toFixed(2))}).eq('id', old.contaId).eq('user_id', curUser);
   }
   // Apply new account
   if (contaId) {
-    const accs = getAccs(), acc = accs.find(a => a.id === contaId);
-    if (acc) { acc.saldo = parseFloat((acc.saldo + (editTxType==='income' ? val : -val)).toFixed(2)); setAccs(accs); }
+    await loadAllData();
+    const acc2 = _cache.accs.find(a => a.id === contaId);
+    if (acc2) await SUPA.from('accounts').update({saldo: parseFloat((acc2.saldo + (editTxType==='income'?val:-val)).toFixed(2))}).eq('id', contaId).eq('user_id', curUser);
   }
-  txs[idx] = { ...old, type: editTxType, desc, value: val, cat, date, contaId };
-  setTxs(txs);
+  await SUPA.from('transactions').update({type: editTxType, desc, value: val, cat, date, conta_id: contaId}).eq('id', id).eq('user_id', curUser);
+  await loadAllData();
   document.getElementById('edit-tx-modal').style.display = 'none';
   render();
 });
@@ -2476,19 +2508,17 @@ document.getElementById('close-edit-acc-modal').addEventListener('click', () => 
 document.getElementById('edit-acc-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('edit-acc-modal')) document.getElementById('edit-acc-modal').style.display = 'none';
 });
-document.getElementById('confirm-edit-acc').addEventListener('click', () => {
-  const id    = parseInt(document.getElementById('edit-acc-id').value);
-  const nome  = document.getElementById('edit-acc-nome').value.trim();
-  const saldo = parseFloat(document.getElementById('edit-acc-saldo').value) || 0;
-  const cor   = document.getElementById('edit-acc-cor').value;
+document.getElementById('confirm-edit-acc').addEventListener('click', async () => {
+  const id      = parseInt(document.getElementById('edit-acc-id').value);
+  const nome    = document.getElementById('edit-acc-nome').value.trim();
+  const saldo   = parseFloat(document.getElementById('edit-acc-saldo').value) || 0;
+  const cor     = document.getElementById('edit-acc-cor').value;
   const tipoSel = document.getElementById('edit-acc-tipo');
-  const icone = tipoSel.value;
-  const tipo  = tipoSel.options[tipoSel.selectedIndex].text.split(' ').slice(1).join(' ');
+  const icone   = tipoSel.value;
+  const tipo    = tipoSel.options[tipoSel.selectedIndex].text.split(' ').slice(1).join(' ');
   if (!nome) { alert('Informe o nome da conta.'); return; }
-  const accs = getAccs(), idx = accs.findIndex(a => a.id === id);
-  if (idx === -1) return;
-  accs[idx] = { ...accs[idx], nome, icone, tipo, saldo, cor };
-  setAccs(accs);
+  await SUPA.from('accounts').update({nome, icone, tipo, saldo, cor}).eq('id', id).eq('user_id', curUser);
+  await loadAllData();
   document.getElementById('edit-acc-modal').style.display = 'none';
   render();
 });
@@ -2510,22 +2540,19 @@ document.getElementById('close-edit-fin-modal').addEventListener('click', () => 
 document.getElementById('edit-fin-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('edit-fin-modal')) document.getElementById('edit-fin-modal').style.display = 'none';
 });
-document.getElementById('confirm-edit-fin').addEventListener('click', () => {
-  const id       = parseInt(document.getElementById('edit-fin-id').value);
-  const nome     = document.getElementById('edit-fin-nome').value.trim();
-  const banco    = document.getElementById('edit-fin-banco').value.trim();
-  const valorBem = parseFloat(document.getElementById('edit-fin-bem').value) || 0;
+document.getElementById('confirm-edit-fin').addEventListener('click', async () => {
+  const id         = parseInt(document.getElementById('edit-fin-id').value);
+  const nome       = document.getElementById('edit-fin-nome').value.trim();
+  const banco      = document.getElementById('edit-fin-banco').value.trim();
+  const valorBem   = parseFloat(document.getElementById('edit-fin-bem').value) || 0;
   const valorAtual = parseFloat(document.getElementById('edit-fin-atual').value) || valorBem;
   if (!nome) { alert('Informe o nome.'); return; }
-  const fins = getFins(), idx = fins.findIndex(f => f.id === id);
-  if (idx === -1) return;
-  fins[idx] = { ...fins[idx], nome, banco, valorBem, valorAtual };
-  // Sync linked ativo
-  if (fins[idx].ativoId) {
-    const ativos = getAtivos(), aidx = ativos.findIndex(a => a.id === fins[idx].ativoId);
-    if (aidx !== -1) { ativos[aidx] = { ...ativos[aidx], nome, desc: banco ? 'Financiado — '+banco : '', valorCompra: valorBem, valorAtual }; setAtivos(ativos); }
+  const fin = getFins().find(f => f.id === id);
+  await SUPA.from('financings').update({nome, banco, valor_bem: valorBem, valor_atual: valorAtual}).eq('id', id).eq('user_id', curUser);
+  if (fin && fin.ativoId) {
+    await SUPA.from('assets').update({nome, descricao: banco?'Financiado — '+banco:'', valor_compra: valorBem, valor_atual: valorAtual}).eq('id', fin.ativoId).eq('user_id', curUser);
   }
-  setFins(fins);
+  await loadAllData();
   document.getElementById('edit-fin-modal').style.display = 'none';
   render();
 });
@@ -2548,23 +2575,20 @@ document.getElementById('close-edit-pat-modal').addEventListener('click', () => 
 document.getElementById('edit-pat-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('edit-pat-modal')) document.getElementById('edit-pat-modal').style.display = 'none';
 });
-document.getElementById('confirm-edit-pat').addEventListener('click', () => {
-  const id           = parseInt(document.getElementById('edit-pat-id').value);
-  const nome         = document.getElementById('edit-pat-nome').value.trim();
-  const desc         = document.getElementById('edit-pat-desc').value.trim();
-  const valorCompra  = parseFloat(document.getElementById('edit-pat-compra').value) || 0;
-  const valorAtual   = parseFloat(document.getElementById('edit-pat-atual').value) || valorCompra;
+document.getElementById('confirm-edit-pat').addEventListener('click', async () => {
+  const id            = parseInt(document.getElementById('edit-pat-id').value);
+  const nome          = document.getElementById('edit-pat-nome').value.trim();
+  const desc          = document.getElementById('edit-pat-desc').value.trim();
+  const valorCompra   = parseFloat(document.getElementById('edit-pat-compra').value) || 0;
+  const valorAtual    = parseFloat(document.getElementById('edit-pat-atual').value) || valorCompra;
   const dataAquisicao = document.getElementById('edit-pat-data').value;
   if (!nome || !valorCompra) { alert('Informe nome e valor de compra.'); return; }
-  const ativos = getAtivos(), idx = ativos.findIndex(a => a.id === id);
-  if (idx === -1) return;
-  ativos[idx] = { ...ativos[idx], nome, desc, valorCompra, valorAtual, dataAquisicao };
-  // Sync linked fin if exists
-  if (ativos[idx].finId) {
-    const fins = getFins(), fidx = fins.findIndex(f => f.id === ativos[idx].finId);
-    if (fidx !== -1) { fins[fidx] = { ...fins[fidx], nome, banco: desc.replace('Financiado — ',''), valorBem: valorCompra, valorAtual }; setFins(fins); }
+  await SUPA.from('assets').update({nome, desc, valor_compra: valorCompra, valor_atual: valorAtual, data_aquisicao: dataAquisicao || null}).eq('id', id).eq('user_id', curUser);
+  const ativo = getAtivos().find(a => a.id === id);
+  if (ativo && ativo.finId) {
+    await SUPA.from('financings').update({nome, banco: desc.replace('Financiado — ',''), valor_bem: valorCompra, valor_atual: valorAtual}).eq('id', ativo.finId).eq('user_id', curUser);
   }
-  setAtivos(ativos);
+  await loadAllData();
   document.getElementById('edit-pat-modal').style.display = 'none';
   render();
 });
@@ -2706,6 +2730,7 @@ function renderRecentTxs() {
     el.appendChild(div);
   });
 }
+
 
 updateCatSel();
 </script>
