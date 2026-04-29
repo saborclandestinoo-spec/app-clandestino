@@ -1995,6 +1995,60 @@ function renderFinanciamentos() {
 }
 
 // ─── MAIN RENDER ──────────────────────────────────────────────────────
+function renderInsights() {
+  const el = document.getElementById('ins-list');
+  if (!el) return;
+  const txs  = getTxs();
+  const accs = getAccs();
+  const fins = getFins();
+  const month = txs.filter(t => {
+    const d = new Date(t.date+'T12:00:00');
+    return d.getMonth() === curM && d.getFullYear() === curY;
+  });
+  const inc  = month.filter(t => t.type==='income').reduce((s,t) => s+t.value, 0);
+  const exp  = month.filter(t => t.type==='expense').reduce((s,t) => s+t.value, 0);
+  const inv  = month.filter(t => t.type==='invest').reduce((s,t) => s+t.value, 0);
+  const saldo = inc - exp - inv;
+  const insights = [];
+
+  if (inc === 0) {
+    insights.push({icon:'💡', text:'<strong>Nenhuma receita lançada</strong> neste mês. Adicione suas entradas para acompanhar seu saldo.'});
+  } else {
+    const savRate = Math.round((inc - exp - inv) / inc * 100);
+    if (savRate >= 20) insights.push({icon:'🌟', text:'<strong>Ótima taxa de poupança!</strong> Você está guardando '+savRate+'% da sua renda este mês.'});
+    else if (savRate >= 0) insights.push({icon:'⚠️', text:'<strong>Taxa de poupança: '+savRate+'%.</strong> Tente chegar a pelo menos 20% para uma saúde financeira melhor.'});
+    else insights.push({icon:'🚨', text:'<strong>Gastos acima da renda!</strong> Você gastou '+fmt(exp+inv)+' mas recebeu apenas '+fmt(inc)+' este mês.'});
+  }
+
+  if (exp > 0 && inc > 0 && exp > inc * 0.5) {
+    insights.push({icon:'📊', text:'<strong>Despesas altas:</strong> seus gastos ('+fmt(exp)+') representam '+Math.round(exp/inc*100)+'% da sua renda. Revise categorias de maior gasto.'});
+  }
+
+  if (inv > 0) {
+    insights.push({icon:'📈', text:'<strong>Investindo '+fmt(inv)+'</strong> este mês — '+Math.round(inv/(inc||1)*100)+'% da renda. Continue assim!'});
+  } else if (inc > 0) {
+    insights.push({icon:'💰', text:'<strong>Sem investimentos</strong> lançados este mês. Considere reservar parte da sua renda.'});
+  }
+
+  const totalSaldo = accs.reduce((s,a) => s + a.saldo, 0);
+  if (totalSaldo < 0) {
+    insights.push({icon:'🔴', text:'<strong>Saldo total negativo:</strong> '+fmt(totalSaldo)+'. Verifique suas contas.'});
+  }
+
+  if (fins.length > 0) {
+    const totalDividas = fins.reduce((s,f) => { const p=(f.pagas||[]).length; return s+(f.numParcelas-p)*f.parcVal; }, 0);
+    insights.push({icon:'🏦', text:'<strong>Dívidas restantes: '+fmt(totalDividas)+'</strong> em '+fins.length+' financiamento'+(fins.length!==1?'s':'')+'.'});
+  }
+
+  if (!insights.length) {
+    insights.push({icon:'✅', text:'<strong>Tudo certo!</strong> Continue monitorando suas finanças regularmente.'});
+  }
+
+  el.innerHTML = insights.map(i =>
+    '<div class="ins-card"><div class="ins-icon">'+i.icon+'</div><div class="ins-text">'+i.text+'</div></div>'
+  ).join('');
+}
+
 function render() {
   if (!curUser) return;
   updateHeader(); drawBarChart(); updateCharts();
@@ -2519,7 +2573,7 @@ document.getElementById('confirm-edit-tx').addEventListener('click', async () =>
         await SUPA.from('accounts').update({saldo: newSaldo}).eq('id', contaId).eq('user_id', curUser);
       }
     }
-    const { error } = await SUPA.from('transactions').update({type: editTxType, desc, value: val, cat, date, conta_id: contaId}).eq('id', id).eq('user_id', curUser);
+    const { error } = await SUPA.from('transactions').update({type: editTxType, descricao: desc, value: val, cat, date, conta_id: contaId}).eq('id', id).eq('user_id', curUser);
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
     await loadAllData();
     document.getElementById('edit-tx-modal').style.display = 'none';
