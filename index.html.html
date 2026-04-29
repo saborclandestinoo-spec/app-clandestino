@@ -2492,28 +2492,42 @@ document.getElementById('edit-tx-modal').addEventListener('click', e => {
 });
 
 document.getElementById('confirm-edit-tx').addEventListener('click', async () => {
-  const id      = parseInt(document.getElementById('edit-tx-id').value);
-  const desc    = document.getElementById('edit-tx-desc').value.trim();
-  const val     = parseFloat(document.getElementById('edit-tx-val').value);
-  const cat     = document.getElementById('edit-tx-cat').value;
-  const date    = document.getElementById('edit-tx-date').value;
-  const contaId = parseInt(document.getElementById('edit-tx-conta').value) || null;
-  if (!desc || !val || val <= 0 || !date) { alert('Preencha todos os campos.'); return; }
-  const old = _cache.txs.find(x => x.id === id);
-  // Revert old account
-  if (old && old.contaId) {
-    const acc = _cache.accs.find(a => a.id === old.contaId);
-    if (acc) await SUPA.from('accounts').update({saldo: parseFloat((acc.saldo + (old.type==='income'?-old.value:old.value)).toFixed(2))}).eq('id', old.contaId).eq('user_id', curUser);
+  try {
+    const id      = parseInt(document.getElementById('edit-tx-id').value);
+    const desc    = document.getElementById('edit-tx-desc').value.trim();
+    const val     = parseFloat(document.getElementById('edit-tx-val').value);
+    const cat     = document.getElementById('edit-tx-cat').value;
+    const date    = document.getElementById('edit-tx-date').value;
+    const contaId = parseInt(document.getElementById('edit-tx-conta').value) || null;
+    if (!desc || !val || val <= 0 || !date) { alert('Preencha todos os campos.'); return; }
+    if (!curUser) { alert('Usuário não autenticado. Faça login novamente.'); return; }
+    const oldTx = _cache.txs.find(x => x.id === id);
+    // Revert old account balance
+    if (oldTx && oldTx.contaId) {
+      const acc = _cache.accs.find(a => a.id === oldTx.contaId);
+      if (acc) {
+        const revertedSaldo = parseFloat((acc.saldo + (oldTx.type==='income'?-oldTx.value:oldTx.value)).toFixed(2));
+        await SUPA.from('accounts').update({saldo: revertedSaldo}).eq('id', oldTx.contaId).eq('user_id', curUser);
+      }
+    }
+    // Apply new account balance
+    if (contaId) {
+      await loadAllData();
+      const acc2 = _cache.accs.find(a => a.id === contaId);
+      if (acc2) {
+        const newSaldo = parseFloat((acc2.saldo + (editTxType==='income'?val:-val)).toFixed(2));
+        await SUPA.from('accounts').update({saldo: newSaldo}).eq('id', contaId).eq('user_id', curUser);
+      }
+    }
+    const { error } = await SUPA.from('transactions').update({type: editTxType, desc, value: val, cat, date, conta_id: contaId}).eq('id', id).eq('user_id', curUser);
+    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    await loadAllData();
+    document.getElementById('edit-tx-modal').style.display = 'none';
+    render();
+  } catch(e) {
+    alert('Erro inesperado: ' + e.message);
+    console.error(e);
   }
-  // Apply new account
-  if (contaId) {
-    const acc2 = _cache.accs.find(a => a.id === contaId);
-    if (acc2) await SUPA.from('accounts').update({saldo: parseFloat((acc2.saldo + (editTxType==='income'?val:-val)).toFixed(2))}).eq('id', contaId).eq('user_id', curUser);
-  }
-  await SUPA.from('transactions').update({type: editTxType, desc, value: val, cat, date, conta_id: contaId}).eq('id', id).eq('user_id', curUser);
-  await loadAllData();
-  document.getElementById('edit-tx-modal').style.display = 'none';
-  render();
 });
 
 // ─── EDIT: CONTA ─────────────────────────────────────────────────────
