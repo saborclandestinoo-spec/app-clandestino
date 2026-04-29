@@ -2442,7 +2442,7 @@ function openEditTx(id) {
   document.getElementById('edit-tx-id').value   = id;
   document.getElementById('edit-tx-desc').value = t.desc;
   document.getElementById('edit-tx-val').value  = t.value;
-  document.getElementById('edit-tx-date').value = t.date;
+  document.getElementById('edit-tx-date').value = t.date ? t.date.slice(0, 10) : '';
   // type buttons
   document.getElementById('edit-btn-expense').className = t.type==='expense' ? 'type-btn ae' : 'type-btn';
   document.getElementById('edit-btn-income').className  = t.type==='income'  ? 'type-btn ai' : 'type-btn';
