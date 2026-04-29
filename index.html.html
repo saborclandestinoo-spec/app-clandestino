@@ -2446,6 +2446,7 @@ function openEditTx(id) {
   // type buttons
   document.getElementById('edit-btn-expense').className = t.type==='expense' ? 'type-btn ae' : 'type-btn';
   document.getElementById('edit-btn-income').className  = t.type==='income'  ? 'type-btn ai' : 'type-btn';
+  document.getElementById('edit-btn-invest').className  = t.type==='invest'  ? 'type-btn ai' : 'type-btn';
   // categories
   const catSel = document.getElementById('edit-tx-cat');
   catSel.innerHTML = (t.type==='expense' ? CAT_EXP : CAT_INC).map(c => '<option value="'+c.name+'">'+c.icon+' '+c.name+'</option>').join('');
@@ -2462,6 +2463,7 @@ document.getElementById('edit-btn-expense').addEventListener('click', () => {
   editTxType = 'expense';
   document.getElementById('edit-btn-expense').className = 'type-btn ae';
   document.getElementById('edit-btn-income').className  = 'type-btn';
+  document.getElementById('edit-btn-invest').className  = 'type-btn';
   const catSel = document.getElementById('edit-tx-cat');
   catSel.innerHTML = CAT_EXP.map(c => '<option value="'+c.name+'">'+c.icon+' '+c.name+'</option>').join('');
 });
@@ -2469,8 +2471,17 @@ document.getElementById('edit-btn-income').addEventListener('click', () => {
   editTxType = 'income';
   document.getElementById('edit-btn-income').className  = 'type-btn ai';
   document.getElementById('edit-btn-expense').className = 'type-btn';
+  document.getElementById('edit-btn-invest').className  = 'type-btn';
   const catSel = document.getElementById('edit-tx-cat');
   catSel.innerHTML = CAT_INC.map(c => '<option value="'+c.name+'">'+c.icon+' '+c.name+'</option>').join('');
+});
+document.getElementById('edit-btn-invest').addEventListener('click', () => {
+  editTxType = 'invest';
+  document.getElementById('edit-btn-invest').className  = 'type-btn ai';
+  document.getElementById('edit-btn-expense').className = 'type-btn';
+  document.getElementById('edit-btn-income').className  = 'type-btn';
+  const catSel = document.getElementById('edit-tx-cat');
+  catSel.innerHTML = CAT_EXP.map(c => '<option value="'+c.name+'">'+c.icon+' '+c.name+'</option>').join('');
 });
 
 document.getElementById('close-edit-tx-modal').addEventListener('click', () => {
@@ -2496,7 +2507,6 @@ document.getElementById('confirm-edit-tx').addEventListener('click', async () =>
   }
   // Apply new account
   if (contaId) {
-    await loadAllData();
     const acc2 = _cache.accs.find(a => a.id === contaId);
     if (acc2) await SUPA.from('accounts').update({saldo: parseFloat((acc2.saldo + (editTxType==='income'?val:-val)).toFixed(2))}).eq('id', contaId).eq('user_id', curUser);
   }
